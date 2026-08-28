@@ -35,6 +35,7 @@ namespace NzbDrone.Core.Books
         private readonly IEditionService _editionService;
         private readonly IProvideAuthorInfo _authorInfo;
         private readonly IProvideBookInfo _bookInfo;
+        private readonly ISearchForNewBook _bookSearchService;
         private readonly IRefreshEditionService _refreshEditionService;
         private readonly IMediaFileService _mediaFileService;
         private readonly IHistoryService _historyService;
@@ -51,6 +52,7 @@ namespace NzbDrone.Core.Books
                                   IAuthorMetadataService authorMetadataService,
                                   IProvideAuthorInfo authorInfo,
                                   IProvideBookInfo bookInfo,
+                                  ISearchForNewBook bookSearchService,
                                   IRefreshEditionService refreshEditionService,
                                   IMediaFileService mediaFileService,
                                   IHistoryService historyService,
@@ -67,6 +69,7 @@ namespace NzbDrone.Core.Books
             _editionService = editionService;
             _authorInfo = authorInfo;
             _bookInfo = bookInfo;
+            _bookSearchService = bookSearchService;
             _refreshEditionService = refreshEditionService;
             _mediaFileService = mediaFileService;
             _historyService = historyService;
@@ -103,6 +106,28 @@ namespace NzbDrone.Core.Books
         protected override RemoteData GetRemoteData(Book local, List<Book> remote, Author data)
         {
             var result = new RemoteData();
+
+            // Goodreads is a durable backstop, not a dead end. Probe the
+            // primary source with stable edition identifiers on refresh and
+            // let the normal merge path promote an exact match.
+            if (local.MetadataProvider == MetadataProvider.Goodreads)
+            {
+                var editions = _editionService.GetEditionsByBook(local.Id);
+                var matches = editions.Where(x => !x.Isbn13.IsNullOrWhiteSpace())
+                    .SelectMany(x => _bookSearchService.SearchHardcoverByIsbn(x.Isbn13))
+                    .Concat(editions.Where(x => !x.Asin.IsNullOrWhiteSpace())
+                        .SelectMany(x => _bookSearchService.SearchHardcoverByAsin(x.Asin)))
+                    .Where(x => x.MetadataProvider == MetadataProvider.Hardcover)
+                    .DistinctBy(x => x.ForeignBookId)
+                    .ToList();
+
+                if (matches.Count == 1)
+                {
+                    result.Entity = matches[0];
+                    result.Entity.Id = local.Id;
+                    return result;
+                }
+            }
 
             var book = remote.SingleOrDefault(x => x.ForeignBookId == local.ForeignBookId);
 
@@ -156,6 +181,14 @@ namespace NzbDrone.Core.Books
 
         protected override bool ShouldDelete(Book local)
         {
+            // A Goodreads-only result is deliberately allowed to live under a
+            // Hardcover author. Its absence from a later Hardcover refresh is
+            // not evidence that the user removed it from their library.
+            if (local.MetadataProvider == MetadataProvider.Goodreads)
+            {
+                return false;
+            }
+
             // not manually added and has no files
             return local.AddOptions.AddType != BookAddType.Manual &&
                 !_mediaFileService.GetFilesByBook(local.Id).Any();
@@ -175,7 +208,21 @@ namespace NzbDrone.Core.Books
         {
             UpdateResult result;
 
+            // A successful identifier match promotes the book to Hardcover and
+            // moves it beneath the corresponding Hardcover author. The
+            // Goodreads record's files and user choices remain on `local`.
+            var promotedAuthor = local.MetadataProvider == MetadataProvider.Goodreads &&
+                                 remote.MetadataProvider == MetadataProvider.Hardcover
+                ? _authorService.FindById(remote.AuthorMetadata.Value.ForeignAuthorId)
+                : null;
+
             remote.UseDbFieldsFrom(local);
+            if (promotedAuthor != null)
+            {
+                remote.AuthorMetadataId = promotedAuthor.AuthorMetadataId;
+                remote.Author = promotedAuthor;
+                remote.AuthorMetadata = promotedAuthor.Metadata.Value;
+            }
 
             if (local.Title != (remote.Title ?? "Unknown") ||
                 local.ForeignBookId != remote.ForeignBookId ||

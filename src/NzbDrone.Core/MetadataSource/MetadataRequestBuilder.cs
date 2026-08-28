@@ -6,7 +6,7 @@ namespace NzbDrone.Core.MetadataSource
 {
     public interface IMetadataRequestBuilder
     {
-        IHttpRequestBuilderFactory GetRequestBuilder();
+        IHttpRequestBuilderFactory GetRequestBuilder(MetadataProvider? provider = null);
     }
 
     public class MetadataRequestBuilder : IMetadataRequestBuilder
@@ -18,9 +18,13 @@ namespace NzbDrone.Core.MetadataSource
             _configService = configService;
         }
 
-        public IHttpRequestBuilderFactory GetRequestBuilder()
+        public IHttpRequestBuilderFactory GetRequestBuilder(MetadataProvider? provider = null)
         {
-            return new HttpRequestBuilder(_configService.MetadataSource.TrimEnd("/") + "/{route}").KeepAlive().CreateFactory();
+            var source = provider == MetadataProvider.Goodreads
+                ? _configService.GoodreadsMetadataSource
+                : _configService.MetadataSource;
+
+            return new HttpRequestBuilder(source.TrimEnd("/") + "/{route}").KeepAlive().CreateFactory();
         }
     }
 }

@@ -71,6 +71,7 @@ class AddNewAuthorSearchResult extends Component {
   render() {
     const {
       foreignAuthorId,
+      metadataProvider,
       titleSlug,
       authorName,
       year,
@@ -163,6 +164,10 @@ class AddNewAuthorSearchResult extends Component {
 
             <div>
               {
+                (metadataProvider === 'Goodreads' || metadataProvider === 1) &&
+                  <Label size={sizes.LARGE}>Goodreads fallback</Label>
+              }
+              {
                 ratings.votes > 0 ?
                   <Label size={sizes.LARGE}>
                     <HeartRating
@@ -218,6 +223,7 @@ class AddNewAuthorSearchResult extends Component {
 
 AddNewAuthorSearchResult.propTypes = {
   foreignAuthorId: PropTypes.string.isRequired,
+  metadataProvider: PropTypes.string,
   titleSlug: PropTypes.string.isRequired,
   authorName: PropTypes.string.isRequired,
   year: PropTypes.number,

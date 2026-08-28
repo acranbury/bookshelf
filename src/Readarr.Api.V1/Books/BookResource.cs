@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.MetadataSource;
 using Readarr.Api.V1.Author;
 using Readarr.Http.REST;
 using Swashbuckle.AspNetCore.Annotations;
@@ -20,6 +21,7 @@ namespace Readarr.Api.V1.Books
         public string Overview { get; set; }
         public int AuthorId { get; set; }
         public string ForeignBookId { get; set; }
+        public MetadataProvider MetadataProvider { get; set; }
         public string ForeignEditionId { get; set; }
         public string TitleSlug { get; set; }
         public bool Monitored { get; set; }
@@ -66,6 +68,7 @@ namespace Readarr.Api.V1.Books
                 Id = model.Id,
                 AuthorId = model.AuthorId,
                 ForeignBookId = model.ForeignBookId,
+                MetadataProvider = model.MetadataProvider,
                 ForeignEditionId = selectedEdition?.ForeignEditionId,
                 TitleSlug = model.TitleSlug,
                 Monitored = model.Monitored,
@@ -98,6 +101,7 @@ namespace Readarr.Api.V1.Books
             {
                 Id = resource.Id,
                 ForeignBookId = resource.ForeignBookId,
+                MetadataProvider = resource.MetadataProvider,
                 ForeignEditionId = resource.ForeignEditionId,
                 TitleSlug = resource.TitleSlug,
                 Title = resource.Title,

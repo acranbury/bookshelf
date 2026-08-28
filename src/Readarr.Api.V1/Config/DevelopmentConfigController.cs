@@ -24,6 +24,7 @@ namespace Prowlarr.Api.V1.Config
             _configService = configService;
 
             SharedValidator.RuleFor(c => c.MetadataSource).IsValidUrl().When(c => !c.MetadataSource.IsNullOrWhiteSpace());
+            SharedValidator.RuleFor(c => c.GoodreadsMetadataSource).IsValidUrl().When(c => !c.GoodreadsMetadataSource.IsNullOrWhiteSpace());
         }
 
         protected override DevelopmentConfigResource GetResourceById(int id)

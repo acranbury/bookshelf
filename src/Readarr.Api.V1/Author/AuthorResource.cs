@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Books;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.MetadataSource;
 using Readarr.Http.REST;
 
 namespace Readarr.Api.V1.Author
@@ -23,6 +24,7 @@ namespace Readarr.Api.V1.Author
         public string AuthorName { get; set; }
         public string AuthorNameLastFirst { get; set; }
         public string ForeignAuthorId { get; set; }
+        public MetadataProvider MetadataProvider { get; set; }
         public string TitleSlug { get; set; }
         public string Overview { get; set; }
         public string Disambiguation { get; set; }
@@ -96,6 +98,7 @@ namespace Readarr.Api.V1.Author
 
                 CleanName = model.CleanName,
                 ForeignAuthorId = model.Metadata.Value.ForeignAuthorId,
+                MetadataProvider = model.Metadata.Value.MetadataProvider,
                 TitleSlug = model.Metadata.Value.TitleSlug,
 
                 // Root folder path is now calculated from the author path
@@ -124,6 +127,7 @@ namespace Readarr.Api.V1.Author
                 Metadata = new NzbDrone.Core.Books.AuthorMetadata
                 {
                     ForeignAuthorId = resource.ForeignAuthorId,
+                    MetadataProvider = resource.MetadataProvider,
                     TitleSlug = resource.TitleSlug,
                     Name = resource.AuthorName,
                     NameLastFirst = resource.AuthorNameLastFirst,

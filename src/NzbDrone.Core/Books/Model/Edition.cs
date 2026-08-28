@@ -5,6 +5,7 @@ using Equ;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.MetadataSource;
 
 namespace NzbDrone.Core.Books
 {
@@ -22,6 +23,7 @@ namespace NzbDrone.Core.Books
         // These are metadata entries
         public int BookId { get; set; }
         public string ForeignEditionId { get; set; }
+        public MetadataProvider MetadataProvider { get; set; }
         public string TitleSlug { get; set; }
         public string Isbn13 { get; set; }
         public string Asin { get; set; }
@@ -56,6 +58,7 @@ namespace NzbDrone.Core.Books
         public override void UseMetadataFrom(Edition other)
         {
             ForeignEditionId = other.ForeignEditionId;
+            MetadataProvider = other.MetadataProvider;
             TitleSlug = other.TitleSlug;
             Isbn13 = other.Isbn13;
             Asin = other.Asin;
@@ -85,6 +88,7 @@ namespace NzbDrone.Core.Books
         public override void ApplyChanges(Edition other)
         {
             ForeignEditionId = other.ForeignEditionId;
+            MetadataProvider = other.MetadataProvider;
             Monitored = other.Monitored;
         }
     }

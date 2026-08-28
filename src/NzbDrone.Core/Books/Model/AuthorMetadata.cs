@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Common.Extensions;
+using NzbDrone.Core.MetadataSource;
 
 namespace NzbDrone.Core.Books
 {
@@ -17,6 +18,7 @@ namespace NzbDrone.Core.Books
         }
 
         public string ForeignAuthorId { get; set; }
+        public MetadataProvider MetadataProvider { get; set; }
         public string TitleSlug { get; set; }
         public string Name { get; set; }
         public string SortName { get; set; }
@@ -43,6 +45,7 @@ namespace NzbDrone.Core.Books
         public override void UseMetadataFrom(AuthorMetadata other)
         {
             ForeignAuthorId = other.ForeignAuthorId;
+            MetadataProvider = other.MetadataProvider;
             TitleSlug = other.TitleSlug;
             Name = other.Name;
             NameLastFirst = other.NameLastFirst;

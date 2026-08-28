@@ -124,6 +124,14 @@ jobs:
             type=raw,value=hardcover-v${{ env.READARR_VERSION }}
             type=raw,value=hardcover-v${{ env.READARR_VERSION }}.${{ github.run_number }}
 
+      - uses: docker/metadata-action@v5
+        id: hcg_meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=hardcover-goodreads
+            type=raw,value=hardcover-goodreads-v${{ env.READARR_VERSION }}.${{ github.run_number }}
+
       - uses: docker/login-action@v3
         if: ${{ github.event_name == 'push' }}
         with:
@@ -157,4 +165,20 @@ jobs:
             COMMIT_HASH=${{ github.event.pull_request.head.sha || github.sha }}
             BUILD_DATE=${{ env.DATE }}
             METADATA_URL=https://hardcover.bookinfo.pro
+            HARDCOVER=true
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: "linux/amd64,linux/arm64"
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.hcg_meta.outputs.tags }}
+          labels: ${{ steps.hcg_meta.outputs.labels }}
+          build-args: |
+            GIT_BRANCH=${{ env.BUILD_SOURCEBRANCHNAME }}
+            COMMIT_HASH=${{ github.event.pull_request.head.sha || github.sha }}
+            BUILD_DATE=${{ env.DATE }}
+            METADATA_URL=https://hardcover.bookinfo.pro
+            GOODREADS_METADATA_URL=https://api.bookinfo.pro
             HARDCOVER=true

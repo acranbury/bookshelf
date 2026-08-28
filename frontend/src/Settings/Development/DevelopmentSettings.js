@@ -73,6 +73,18 @@ class DevelopmentSettings extends Component {
                       {...settings.metadataSource}
                     />
                   </FormGroup>
+                  <FormGroup>
+                    <FormLabel>
+                      Goodreads fallback source
+                    </FormLabel>
+
+                    <FormInputGroup
+                      type={inputTypes.TEXT}
+                      name="goodreadsMetadataSource"
+                      onChange={onInputChange}
+                      {...settings.goodreadsMetadataSource}
+                    />
+                  </FormGroup>
                 </FieldSet>
 
                 <FieldSet legend={translate('Logging')}>

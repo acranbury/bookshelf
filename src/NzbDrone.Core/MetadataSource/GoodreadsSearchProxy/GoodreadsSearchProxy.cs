@@ -9,7 +9,7 @@ namespace NzbDrone.Core.MetadataSource.Goodreads
 {
     public interface IGoodreadsSearchProxy
     {
-        public List<SearchJsonResource> Search(string query);
+        public List<SearchJsonResource> Search(string query, MetadataProvider provider = MetadataProvider.Hardcover);
     }
 
     public class GoodreadsSearchProxy : IGoodreadsSearchProxy
@@ -27,11 +27,11 @@ namespace NzbDrone.Core.MetadataSource.Goodreads
             _logger = logger;
         }
 
-        public List<SearchJsonResource> Search(string query)
+        public List<SearchJsonResource> Search(string query, MetadataProvider provider = MetadataProvider.Hardcover)
         {
             try
             {
-                var httpRequest = _metadataRequestBuilder.GetRequestBuilder().Create()
+                var httpRequest = _metadataRequestBuilder.GetRequestBuilder(provider).Create()
                     .SetSegment("route", "search")
                     .AddQueryParam("q", query)
                     .Build();

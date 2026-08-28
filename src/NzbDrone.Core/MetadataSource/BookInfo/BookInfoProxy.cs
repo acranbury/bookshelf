@@ -90,16 +90,18 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
         public Author GetAuthorInfo(string foreignAuthorId, bool useCache = false)
         {
+            var provider = MetadataProviderIds.FromStoredId(foreignAuthorId);
+            foreignAuthorId = MetadataProviderIds.ToProviderId(foreignAuthorId);
             _logger.Debug("Getting Author details GoodreadsId of {0}", foreignAuthorId);
 
             try
             {
                 if (useCache)
                 {
-                    return PollAuthor(foreignAuthorId);
+                    return PollAuthor(foreignAuthorId, provider);
                 }
 
-                return PollAuthorUncached(foreignAuthorId);
+                return PollAuthorUncached(foreignAuthorId, provider);
             }
             catch (BookInfoException e)
             {
@@ -120,9 +122,11 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
         public Tuple<string, Book, List<AuthorMetadata>> GetBookInfo(string foreignBookId)
         {
+            var provider = MetadataProviderIds.FromStoredId(foreignBookId);
+            foreignBookId = MetadataProviderIds.ToProviderId(foreignBookId);
             try
             {
-                return PollBook(foreignBookId);
+                return PollBook(foreignBookId, provider);
             }
             catch (BookInfoException e)
             {
@@ -213,7 +217,8 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                     q = slug;
                 }
 
-                return Search(q, getAllEditions);
+                var books = Search(q, getAllEditions, MetadataProvider.Hardcover);
+                return books.Any() ? books : Search(q, getAllEditions, MetadataProvider.Goodreads);
             }
             catch (HttpException ex)
             {
@@ -229,20 +234,32 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
         public List<Book> SearchByIsbn(string isbn)
         {
-            return Search(isbn, true);
+            var books = Search(isbn, true, MetadataProvider.Hardcover);
+            return books.Any() ? books : Search(isbn, true, MetadataProvider.Goodreads);
+        }
+
+        public List<Book> SearchHardcoverByIsbn(string isbn)
+        {
+            return Search(isbn, true, MetadataProvider.Hardcover);
         }
 
         public List<Book> SearchByAsin(string asin)
         {
-            return Search(asin, true);
+            var books = Search(asin, true, MetadataProvider.Hardcover);
+            return books.Any() ? books : Search(asin, true, MetadataProvider.Goodreads);
         }
 
-        private List<Book> Search(string query, bool getAllEditions)
+        public List<Book> SearchHardcoverByAsin(string asin)
+        {
+            return Search(asin, true, MetadataProvider.Hardcover);
+        }
+
+        private List<Book> Search(string query, bool getAllEditions, MetadataProvider provider)
         {
             List<SearchJsonResource> result;
             try
             {
-                result = _goodreadsSearchProxy.Search(query);
+                result = _goodreadsSearchProxy.Search(query, provider);
             }
             catch (Exception e)
             {
@@ -264,14 +281,14 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 List<Book> authorBooks;
                 foreach (var author in idMap.Keys)
                 {
-                    authorBooks = SearchByGoodreadsAuthorId(author);
+                    authorBooks = SearchByGoodreadsAuthorId(author, provider);
                     books.AddRange(authorBooks.Where(b => idMap[author].Contains(b.ForeignBookId)));
                 }
 
                 var missingBooks = bookIds.ExceptBy(x => x.ToString(), books, x => x.ForeignBookId, StringComparer.Ordinal).ToList();
                 foreach (var book in missingBooks)
                 {
-                    books.AddRange(SearchByGoodreadsWorkId(book));
+                    books.AddRange(SearchByGoodreadsWorkId(book, provider));
                 }
 
                 return books;
@@ -288,12 +305,12 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
                 if (ids.Count == 1)
                 {
-                    return SearchByGoodreadsBookId(ids[0], false);
+                    return SearchByGoodreadsBookId(ids[0], false, provider);
                 }
 
                 try
                 {
-                    return MapSearchResult(ids);
+                    return MapSearchResult(ids, provider);
                 }
                 catch (HttpException ex)
                 {
@@ -309,12 +326,12 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             }
         }
 
-        private List<Book> SearchByGoodreadsAuthorId(int id)
+        private List<Book> SearchByGoodreadsAuthorId(int id, MetadataProvider provider = MetadataProvider.Hardcover)
         {
             try
             {
                 var authorId = id.ToString();
-                var result = GetAuthorInfo(authorId);
+                var result = PollAuthorUncached(authorId, provider);
                 var books = result.Books.Value;
                 var authors = new Dictionary<string, AuthorMetadata> { { authorId, result.Metadata.Value } };
 
@@ -336,11 +353,11 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             }
         }
 
-        public List<Book> SearchByGoodreadsWorkId(int id)
+        public List<Book> SearchByGoodreadsWorkId(int id, MetadataProvider provider = MetadataProvider.Hardcover)
         {
             try
             {
-                var tuple = GetBookInfo(id.ToString());
+                var tuple = PollBook(id.ToString(), provider);
                 AddDbIds(tuple.Item1, tuple.Item2, tuple.Item3.ToDictionary(x => x.ForeignAuthorId));
                 return new List<Book> { tuple.Item2 };
             }
@@ -355,11 +372,11 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             }
         }
 
-        public List<Book> SearchByGoodreadsBookId(int id, bool getAllEditions)
+        public List<Book> SearchByGoodreadsBookId(int id, bool getAllEditions, MetadataProvider provider = MetadataProvider.Hardcover)
         {
             try
             {
-                var book = GetEditionInfo(id, getAllEditions);
+                var book = GetEditionInfo(id, getAllEditions, provider);
 
                 return new List<Book> { book };
             }
@@ -382,14 +399,14 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             }
         }
 
-        private Book GetEditionInfo(int id, bool getAllEditions)
+        private Book GetEditionInfo(int id, bool getAllEditions, MetadataProvider provider)
         {
             HttpRequest httpRequest;
             HttpResponse httpResponse;
 
             while (true)
             {
-                httpRequest = _requestBuilder.GetRequestBuilder().Create()
+                httpRequest = _requestBuilder.GetRequestBuilder(provider).Create()
                     .SetSegment("route", $"book/{id}")
                     .Build();
 
@@ -428,14 +445,14 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
             if (type == "author")
             {
-                var author = PollAuthor(newId);
+                var author = PollAuthor(newId, provider);
 
                 book = author.Books.Value.FirstOrDefault(b => b.Editions.Value.Any(e => e.ForeignEditionId == id.ToString()));
                 authors = new List<AuthorMetadata> { author.Metadata.Value };
             }
             else if (type == "work")
             {
-                var tuple = PollBook(newId);
+                var tuple = PollBook(newId, provider);
 
                 book = tuple.Item2;
                 authors = tuple.Item3;
@@ -473,13 +490,13 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             return book;
         }
 
-        private List<Book> MapSearchResult(List<int> ids)
+        private List<Book> MapSearchResult(List<int> ids, MetadataProvider provider)
         {
             HttpResponse<BulkBookResource> httpResponse;
 
             while (true)
             {
-                var httpRequest = _requestBuilder.GetRequestBuilder().Create()
+                var httpRequest = _requestBuilder.GetRequestBuilder(provider).Create()
                     .SetSegment("route", "book/bulk")
                     .SetHeader("Content-Type", "application/json")
                     .Build();
@@ -502,10 +519,10 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 }
             }
 
-            return MapBulkBook(httpResponse.Resource);
+            return MapBulkBook(httpResponse.Resource, provider);
         }
 
-        private List<Book> MapBulkBook(BulkBookResource resource)
+        private List<Book> MapBulkBook(BulkBookResource resource, MetadataProvider provider)
         {
             var books = new List<Book>();
 
@@ -514,20 +531,20 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 return books;
             }
 
-            var authors = resource.Authors.Select(MapAuthorMetadata).ToDictionary(x => x.ForeignAuthorId, x => x);
-            var series = resource.Series.Select(MapSeries).ToList();
+            var authors = resource.Authors.Select(x => MapAuthorMetadata(x, provider)).ToDictionary(x => x.ForeignAuthorId, x => x);
+            var series = resource.Series.Select(x => MapSeries(x, provider)).ToList();
 
             foreach (var work in resource.Works)
             {
-                var book = MapBook(work);
-                var authorId = work.Books.OrderByDescending(b => b.AverageRating * b.RatingCount).First().Contributors.First().ForeignId.ToString();
+                var book = MapBook(work, provider);
+                var authorId = MetadataProviderIds.ToStoredId(provider, work.Books.OrderByDescending(b => b.AverageRating * b.RatingCount).First().Contributors.First().ForeignId.ToString());
 
                 AddDbIds(authorId, book, authors);
 
                 books.Add(book);
             }
 
-            MapSeriesLinks(series, books, resource.Series);
+            MapSeriesLinks(series, books, resource.Series, provider);
 
             return books;
         }
@@ -582,10 +599,10 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             book.AuthorMetadataId = author.AuthorMetadataId;
         }
 
-        private Author PollAuthor(string foreignAuthorId)
+        private Author PollAuthor(string foreignAuthorId, MetadataProvider provider)
         {
             return _authorCache.GetOrAdd(foreignAuthorId,
-                () => PollAuthorUncached(foreignAuthorId),
+                () => PollAuthorUncached(foreignAuthorId, provider),
                 new LazyCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1),
@@ -596,13 +613,13 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 }.RegisterPostEvictionCallback((key, value, reason, state) => _logger.Debug($"Clearing cache for {key} due to {reason}")));
         }
 
-        private Author PollAuthorUncached(string foreignAuthorId)
+        private Author PollAuthorUncached(string foreignAuthorId, MetadataProvider provider)
         {
             AuthorResource resource = null;
 
             for (var i = 0; i < 60; i++)
             {
-                var httpRequest = _requestBuilder.GetRequestBuilder().Create()
+                var httpRequest = _requestBuilder.GetRequestBuilder(provider).Create()
                     .SetSegment("route", $"author/{foreignAuthorId}")
                     .Build();
 
@@ -649,16 +666,16 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 throw new BookInfoException($"Failed to get works for {foreignAuthorId}");
             }
 
-            return MapAuthor(resource);
+            return MapAuthor(resource, provider);
         }
 
-        private Tuple<string, Book, List<AuthorMetadata>> PollBook(string foreignBookId)
+        private Tuple<string, Book, List<AuthorMetadata>> PollBook(string foreignBookId, MetadataProvider provider)
         {
             WorkResource resource = null;
 
             for (var i = 0; i < 60; i++)
             {
-                var httpRequest = _requestBuilder.GetRequestBuilder().Create()
+                var httpRequest = _requestBuilder.GetRequestBuilder(provider).Create()
                     .SetSegment("route", $"work/{foreignBookId}")
                     .Build();
 
@@ -687,7 +704,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
                     if (type == "author")
                     {
-                        var author = PollAuthor(newId);
+                        var author = PollAuthor(newId, provider);
                         var authorBook = author.Books.Value.SingleOrDefault(x => x.ForeignBookId == foreignBookId);
 
                         if (authorBook == null)
@@ -732,12 +749,12 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 throw new BookInfoException($"Failed to get books for {foreignBookId}");
             }
 
-            var book = MapBook(resource);
-            var authorId = GetAuthorId(resource).ToString();
-            var metadata = resource.Authors.Select(MapAuthorMetadata).ToList();
+            var book = MapBook(resource, provider);
+            var authorId = MetadataProviderIds.ToStoredId(provider, GetAuthorId(resource).ToString());
+            var metadata = resource.Authors.Select(x => MapAuthorMetadata(x, provider)).ToList();
 
-            var series = resource.Series.Select(MapSeries).ToList();
-            MapSeriesLinks(series, new List<Book> { book }, resource.Series);
+            var series = resource.Series.Select(x => MapSeries(x, provider)).ToList();
+            MapSeriesLinks(series, new List<Book> { book }, resource.Series, provider);
 
             return Tuple.Create(authorId, book, metadata);
         }
@@ -761,12 +778,13 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             Thread.Sleep(TimeSpan.FromSeconds(seconds));
         }
 
-        private static AuthorMetadata MapAuthorMetadata(AuthorResource resource)
+        private static AuthorMetadata MapAuthorMetadata(AuthorResource resource, MetadataProvider provider)
         {
             var metadata = new AuthorMetadata
             {
-                ForeignAuthorId = resource.ForeignId.ToString(),
-                TitleSlug = resource.ForeignId.ToString(),
+                ForeignAuthorId = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
+                MetadataProvider = provider,
+                TitleSlug = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
                 Name = resource.Name.CleanSpaces(),
                 Overview = resource.Description,
                 Ratings = new Ratings { Votes = resource.RatingCount, Value = (decimal)resource.AverageRating },
@@ -794,20 +812,20 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             return metadata;
         }
 
-        private static Author MapAuthor(AuthorResource resource)
+        private static Author MapAuthor(AuthorResource resource, MetadataProvider provider)
         {
-            var metadata = MapAuthorMetadata(resource);
+            var metadata = MapAuthorMetadata(resource, provider);
 
             var books = resource.Works
                 .Where(x => x.ForeignId > 0 && GetAuthorId(x) == resource.ForeignId)
-                .Select(MapBook)
+                .Select(x => MapBook(x, provider))
                 .ToList();
 
             books.ForEach(x => x.AuthorMetadata = metadata);
 
-            var series = resource.Series.Select(MapSeries).ToList();
+            var series = resource.Series.Select(x => MapSeries(x, provider)).ToList();
 
-            MapSeriesLinks(series, books, resource.Series);
+            MapSeriesLinks(series, books, resource.Series, provider);
 
             var result = new Author
             {
@@ -820,7 +838,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             return result;
         }
 
-        private static void MapSeriesLinks(List<Series> series, List<Book> books, List<SeriesResource> resource)
+        private static void MapSeriesLinks(List<Series> series, List<Book> books, List<SeriesResource> resource, MetadataProvider provider)
         {
             var bookDict = books.ToDictionary(x => x.ForeignBookId);
             var seriesDict = series.ToDictionary(x => x.ForeignSeriesId);
@@ -833,11 +851,12 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             // only take series where there are some works
             foreach (var s in resource.Where(x => x.LinkItems.Any()))
             {
-                if (seriesDict.TryGetValue(s.ForeignId.ToString(), out var curr))
+                var seriesId = MetadataProviderIds.ToStoredId(provider, s.ForeignId.ToString());
+                if (seriesDict.TryGetValue(seriesId, out var curr))
                 {
-                    curr.LinkItems = s.LinkItems.Where(x => x.ForeignWorkId != 0 && bookDict.ContainsKey(x.ForeignWorkId.ToString())).Select(l => new SeriesBookLink
+                    curr.LinkItems = s.LinkItems.Where(x => x.ForeignWorkId != 0 && bookDict.ContainsKey(MetadataProviderIds.ToStoredId(curr.MetadataProvider, x.ForeignWorkId.ToString()))).Select(l => new SeriesBookLink
                     {
-                        Book = bookDict[l.ForeignWorkId.ToString()],
+                        Book = bookDict[MetadataProviderIds.ToStoredId(curr.MetadataProvider, l.ForeignWorkId.ToString())],
                         Series = curr,
                         IsPrimary = l.Primary,
                         Position = l.PositionInSeries,
@@ -852,11 +871,12 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             }
         }
 
-        private static Series MapSeries(SeriesResource resource)
+        private static Series MapSeries(SeriesResource resource, MetadataProvider provider)
         {
             var series = new Series
             {
-                ForeignSeriesId = resource.ForeignId.ToString(),
+                ForeignSeriesId = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
+                MetadataProvider = provider,
                 Title = resource.Title,
                 Description = resource.Description
             };
@@ -864,13 +884,14 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             return series;
         }
 
-        private static Book MapBook(WorkResource resource)
+        private static Book MapBook(WorkResource resource, MetadataProvider provider)
         {
             var book = new Book
             {
-                ForeignBookId = resource.ForeignId.ToString(),
+                ForeignBookId = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
+                MetadataProvider = provider,
                 Title = resource.Title,
-                TitleSlug = resource.ForeignId.ToString(),
+                TitleSlug = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
                 CleanTitle = Parser.Parser.CleanAuthorName(resource.Title),
                 ReleaseDate = resource.ReleaseDate,
                 Genres = resource.Genres,
@@ -881,7 +902,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
 
             if (resource.Books != null)
             {
-                book.Editions = resource.Books.Select(x => MapEdition(x)).ToList();
+                book.Editions = resource.Books.Select(x => MapEdition(x, provider)).ToList();
 
                 // monitor the most popular release
                 var mostPopular = book.Editions.Value.MaxBy(x => x.Ratings.Popularity);
@@ -944,12 +965,13 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             return book;
         }
 
-        private static Edition MapEdition(BookResource resource)
+        private static Edition MapEdition(BookResource resource, MetadataProvider provider)
         {
             var edition = new Edition
             {
-                ForeignEditionId = resource.ForeignId.ToString(),
-                TitleSlug = resource.ForeignId.ToString(),
+                ForeignEditionId = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
+                MetadataProvider = provider,
+                TitleSlug = MetadataProviderIds.ToStoredId(provider, resource.ForeignId.ToString()),
                 Isbn13 = resource.Isbn13,
                 Asin = resource.Asin,
                 Title = resource.Title.CleanSpaces(),

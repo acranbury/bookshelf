@@ -287,6 +287,22 @@ namespace NzbDrone.Core.Configuration
             }
         }
 
+        public string GoodreadsMetadataSource
+        {
+            get
+            {
+                var source = GetValue("GoodreadsMetadataSource", "");
+                if (source.IsNullOrWhiteSpace())
+                {
+                    source = Environment.GetEnvironmentVariable("GOODREADS_METADATA_URL");
+                }
+
+                return source.IsNullOrWhiteSpace() ? "https://api.bookinfo.pro" : source;
+            }
+
+            set { SetValue("GoodreadsMetadataSource", value); }
+        }
+
         public WriteAudioTagsType WriteAudioTags
         {
             get { return GetValueEnum("WriteAudioTags", WriteAudioTagsType.No); }

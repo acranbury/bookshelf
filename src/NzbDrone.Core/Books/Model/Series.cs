@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Equ;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.MetadataSource;
 
 namespace NzbDrone.Core.Books
 {
@@ -10,6 +11,7 @@ namespace NzbDrone.Core.Books
     public class Series : Entity<Series>
     {
         public string ForeignSeriesId { get; set; }
+        public MetadataProvider MetadataProvider { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public bool Numbered { get; set; }
@@ -33,6 +35,7 @@ namespace NzbDrone.Core.Books
         public override void UseMetadataFrom(Series other)
         {
             ForeignSeriesId = other.ForeignSeriesId;
+            MetadataProvider = other.MetadataProvider;
             Title = other.Title;
             Description = other.Description;
             Numbered = other.Numbered;

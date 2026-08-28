@@ -72,6 +72,7 @@ class AddNewBookSearchResult extends Component {
   render() {
     const {
       foreignBookId,
+      metadataProvider,
       titleSlug,
       title,
       seriesTitle,
@@ -114,7 +115,7 @@ class AddNewBookSearchResult extends Component {
           }
 
           <div className={styles.content}>
-            <div className={styles.titleRow}>
+              <div className={styles.titleRow}>
               <div className={styles.titleContainer}>
                 <div className={styles.title}>
                   {title}
@@ -125,6 +126,11 @@ class AddNewBookSearchResult extends Component {
                   }
                 </div>
               </div>
+
+              {
+                (metadataProvider === 'Goodreads' || metadataProvider === 1) &&
+                  <Label size={sizes.LARGE}>Goodreads fallback</Label>
+              }
 
               <div className={styles.icons}>
                 {
@@ -214,6 +220,7 @@ class AddNewBookSearchResult extends Component {
 
 AddNewBookSearchResult.propTypes = {
   foreignBookId: PropTypes.string.isRequired,
+  metadataProvider: PropTypes.string,
   titleSlug: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
   seriesTitle: PropTypes.string,
